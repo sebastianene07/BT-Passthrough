@@ -42,6 +42,8 @@ enum pollers_s {
 /* Poll HCI events flag */
 static volatile int g_poll_hci_events = 1;
 
+static int g_connection_id;
+
 /* BT fifo name */
 const char *fifo_name = "/tmp/bt_fifo";
 
@@ -169,6 +171,8 @@ int main(int argc, char **argv)
 	socklen_t client_addr_len;
 	struct sockaddr_in client_addr;
 
+	client_addr_len = sizeof(socklen_t);
+
 	if (argc != 3) {
 		show_help();
 	}
@@ -223,7 +227,7 @@ int main(int argc, char **argv)
 			if (pollers[i].revents & POLLOUT) {
 
 				if (i == FD_NAMED_FIFO) {
-					printf("Writing data from FIFO enabled\n");
+//					printf("Writing data from FIFO enabled\n");
 
 					int available_for_write = 0;
 
@@ -245,17 +249,17 @@ int main(int argc, char **argv)
 
 						ret = write(pollers[i].fd, ptr, available_for_write);
 						if (ret >= 0) {
-							printf("Wrote %d bytes from HCI socket to FIFO\n", ret);
+//							printf("Wrote %d bytes from HCI socket to FIFO\n", ret);
 
 							tx_already_sent_len = (tx_already_sent_len + ret) % BUFFER_SIZE;
 						} else {
-							printf("Error write from FIFO %s\n", strerror(errno));
+//							printf("Error write from FIFO %s\n", strerror(errno));
 						}
 					}
 				}
 
 				if (i == FD_BLUETOOTH) {
-					printf("Writing data from FIFO to HCI\n");
+//					printf("Writing data from FIFO to HCI\n");
 
 					int available_for_write = 0;
 
@@ -270,19 +274,19 @@ int main(int argc, char **argv)
 						/* We have no data to write, let's disable POLLOUT events for the
              * moment.
 						 */
-						printf("No data to write we disable POLLOUT on HCI socket\n");
+//						printf("No data to write we disable POLLOUT on HCI socket\n");
 						pollers[FD_BLUETOOTH].events &= ~POLLOUT;
 					} else {
 						uint8_t *ptr = rx_buffer + (rx_already_sent_len % BUFFER_SIZE);
 
 						ret = write(pollers[i].fd, ptr, available_for_write);
 						if (ret >= 0) {
-							printf("Wrote %d bytes from FIFO to HCI scoket\n", ret);
+//							printf("Wrote %d bytes from FIFO to HCI scoket\n", ret);
 
-							for (int j = 0; j < ret; j++) {
-								printf("%02x, ", ptr[j]);
-							}
-							printf("\n");
+//							for (int j = 0; j < ret; j++) {
+//								printf("%02x, ", ptr[j]);
+//							}
+//							printf("\n");
 							rx_already_sent_len = (rx_already_sent_len + ret) % BUFFER_SIZE;
 						} else {
 							printf("Error write from FIFO %s\n", strerror(errno));
@@ -295,7 +299,7 @@ int main(int argc, char **argv)
 
 				/* We have waiting data in FIFO that needs to be sent on the socket */
 				if (i == FD_NAMED_FIFO) {
-					printf("Waiting data in FIFO detected\n");
+//					printf("Waiting data in FIFO detected\n");
 
 					/* Check if we have space in the circular buffer */
 
@@ -312,16 +316,19 @@ int main(int argc, char **argv)
 						/* We don't have space to pull the data out from the FIFO and we
 						 * wait for the HCI socket to consume it.
 						 */
-						printf("Wait for HCI socket to consume FIFO data\n");
+//						printf("Wait for HCI socket to consume FIFO data\n");
 						pollers[FD_BLUETOOTH].events |= POLLOUT;
 					} else {
 						uint8_t *ptr = rx_buffer + (rx_waiting_to_send_len % BUFFER_SIZE);
 						ret = read(pollers[i].fd, ptr, available_space);
 						if (ret >= 0) {
-							printf("Received %d bytes from FIFO endpoint\n", ret);
+//							printf("Received %d bytes from FIFO endpoint\n", ret);
 							if (ret == 0 && is_server_used) {
 								pollers[FD_BLUETOOTH].events &= ~POLLOUT;
 								close(pollers[i].fd);
+								printf("Connection reset bt peer - flush data\n");
+								tx_waiting_to_send_len = 0; tx_already_sent_len = 0;
+								rx_waiting_to_send_len = 0; rx_already_sent_len = 0;
 								pollers[i].fd = -1;
 							} else {
 								pollers[FD_BLUETOOTH].events |= POLLOUT;
@@ -338,7 +345,7 @@ int main(int argc, char **argv)
 
 				/* We have waiting data that needs to be sent from HCI to the pipe */
 				if (i == FD_BLUETOOTH) {
-					printf("Waiting data in HCI socket detected\n");
+//					printf("Waiting data in HCI socket detected\n");
 
 					/* Check if we have space in the circular buffer */
 
@@ -355,13 +362,13 @@ int main(int argc, char **argv)
 						/* We don't have space to pull the data out from the FIFO and we
 						 * wait for the HCI socket to consume it.
 						 */
-						printf("Wait for HCI socket to consume FIFO data\n");
+//						printf("Wait for HCI socket to consume FIFO data\n");
 					} else {
 						uint8_t *ptr = tx_buffer + (tx_waiting_to_send_len % BUFFER_SIZE);
 
 						ret = read(pollers[i].fd, ptr, available_space);
 						if (ret >= 0) {
-							printf("Received %d bytes from HCI socket\n", ret);
+//							printf("Received %d bytes from HCI socket\n", ret);
 
 							tx_waiting_to_send_len =
 								(tx_waiting_to_send_len + ret) % BUFFER_SIZE;
@@ -377,16 +384,18 @@ int main(int argc, char **argv)
 			}
 
 			if (i == FD_SERVER_LISTENING_SOCKET && (pollers[i].revents & POLLIN)) {
-				printf("Received event on server socket\n");
+//				printf("Received event on server socket\n");
 				ret = accept(pollers[FD_SERVER_LISTENING_SOCKET].fd,
 										 (struct sockaddr *)&client_addr,
 										 &client_addr_len);
 				if (ret < 0) {
-					printf("Failed to accept incomming connection\n");
+					printf("Failed to accept incomming connection: %s\n", strerror(errno));
 					continue;
 				}
 
-				printf("Established connection with client\n");
+				printf("[%d] Established connection with client\n", g_connection_id++);
+				tx_waiting_to_send_len = 0; tx_already_sent_len = 0;
+				rx_waiting_to_send_len = 0; rx_already_sent_len = 0;
 				server_data_fd = ret;
 #if 0
 				/* Make socker non blocking */
