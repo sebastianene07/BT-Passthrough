@@ -23,6 +23,7 @@
 
 #define BUFFER_SIZE							(4096)
 #define PORT										(6001)
+#define SERVER_TEST_PORT				(6002)
 
 #define DIE(cond, ...)					\
 do { if (cond) {								\
@@ -46,6 +47,7 @@ const char *fifo_name = "/tmp/bt_fifo";
 
 static int open_hci_device(int device_id)
 {
+#ifndef TEST_PASSTHROUGH_INTERFACE
 	int ret = 0, fd;
 	struct sockaddr_hci local_bt;
 	struct hci_filter flt;
@@ -70,7 +72,21 @@ static int open_hci_device(int device_id)
 
 	ret = bind(ret, (struct sockaddr *)&local_bt, sizeof(struct sockaddr_hci));
 	DIE(ret < 0, "Cannot bind BT socket %s\n", strerror(errno));
+#else
 
+	int ret = 0, fd;
+	struct sockaddr_in test_server_address;
+
+	fd = socket(AF_INET, SOCK_STREAM, 0);
+	DIE(fd < 0, "Cannot open client socket %s\n", strerror(errno));
+
+	test_server_address.sin_family = AF_INET;
+	test_server_address.sin_port = htons(SERVER_TEST_PORT);
+	test_server_address.sin_addr.s_addr = htonl(INADDR_ANY);
+
+	ret = connect(fd, (struct sockaddr *)&test_server_address, sizeof(struct sockaddr));
+	DIE(ret < 0, "Cannot connect to the test server %s\n", strerror(errno));
+#endif
 	return fd;
 }
 
@@ -153,7 +169,7 @@ int main(int argc, char **argv)
 	socklen_t client_addr_len;
 	struct sockaddr_in client_addr;
 
- 	if (argc != 3) {
+	if (argc != 3) {
 		show_help();
 	}
 
@@ -163,7 +179,7 @@ int main(int argc, char **argv)
 	/* argv[1] contains the HCI device id */
 	device_id = atoi(argv[1]);
 	if (!strcmp(argv[2], "pipe")) {
-		is_pipe_used 	 = 1;
+		is_pipe_used	 = 1;
 	} else if (!strcmp(argv[2], "socket")) {
 		is_server_used = 1;
 	} else {
@@ -172,14 +188,14 @@ int main(int argc, char **argv)
 	}
 
 	skt_fd = open_hci_device(device_id);
-	pollers[FD_BLUETOOTH].fd 		 = skt_fd;
+	pollers[FD_BLUETOOTH].fd		 = skt_fd;
 	pollers[FD_BLUETOOTH].events = POLLIN | POLLHUP;
 	pollers[FD_BLUETOOTH].revents = 0;
 
 	if (is_pipe_used)
 		fifo_fd = open_named_fifo();
 
-	pollers[FD_NAMED_FIFO].fd 		= fifo_fd;
+	pollers[FD_NAMED_FIFO].fd			= fifo_fd;
 	pollers[FD_NAMED_FIFO].events = POLLIN | POLLHUP;
 	pollers[FD_NAMED_FIFO].revents = 0;
 
@@ -294,7 +310,7 @@ int main(int argc, char **argv)
 
 					if (available_space <= 0) {
 						/* We don't have space to pull the data out from the FIFO and we
-  					 * wait for the HCI socket to consume it.
+						 * wait for the HCI socket to consume it.
 						 */
 						printf("Wait for HCI socket to consume FIFO data\n");
 						pollers[FD_BLUETOOTH].events |= POLLOUT;
@@ -337,7 +353,7 @@ int main(int argc, char **argv)
 
 					if (available_space <= 0) {
 						/* We don't have space to pull the data out from the FIFO and we
-  					 * wait for the HCI socket to consume it.
+						 * wait for the HCI socket to consume it.
 						 */
 						printf("Wait for HCI socket to consume FIFO data\n");
 					} else {
