@@ -21,6 +21,8 @@
 #include <sys/socket.h>
 #include <sys/stat.h>
 
+#include "hci.h"
+
 #define BUFFER_SIZE             (65536)
 #define PORT                    (6001)
 #define SERVER_TEST_PORT        (6002)
@@ -164,6 +166,63 @@ static void show_help(void)
   exit(-1);
 }
 
+static const char *get_h4_type_name(h4_hci_type_t type)
+{
+	if (type == H4_HCI_TYPE_CMD)
+		return "CMD";
+	else if (type == H4_HCI_TYPE_ACL)
+		return "ACL";
+	else if (type == H4_HCI_TYPE_SCO)
+		return "SCO";
+	else if (type == H4_HCI_TYPE_EVT)
+		return "EVT";
+	else
+		return "! INVALID H4 !";
+}
+
+static int write_hci_data_to_btcontroller(int fd, void *ptr, size_t write_len)
+{
+	h4_hci_pkt_t *pkt = (h4_hci_pkt_t *)ptr;
+	size_t actual_write = 0;
+
+	switch (pkt->h4_type) {
+		case H4_HCI_TYPE_CMD:
+			actual_write = pkt->pkt.cmd.param_len + sizeof(hci_cmd_packet_t);
+			printf("[BtEmulator] Send %s (0x%02X|0x%04X) len:%d\n",
+						 get_h4_type_name(pkt->h4_type),
+						 pkt->pkt.cmd.op.opcode_t.ogf,
+						 pkt->pkt.cmd.op.opcode_t.ocf,
+						 pkt->pkt.cmd.param_len);
+			break;
+
+		case H4_HCI_TYPE_ACL:
+			actual_write = pkt->pkt.acl.data_total_len + sizeof(hci_acl_packet_t);
+			printf("[BtEmulator] Send %s Handle %d len:%d\n",
+						 get_h4_type_name(pkt->h4_type),
+						 pkt->pkt.acl.handle,
+						 pkt->pkt.acl.data_total_len);
+			break;
+
+		case H4_HCI_TYPE_SCO:
+			actual_write = pkt->pkt.sco.data_total_len + sizeof(hci_sco_packet_t);
+			printf("[BtEmulator] Send %s Handle %d len:%d\n",
+						 get_h4_type_name(pkt->h4_type),
+						 pkt->pkt.sco.conn_handle,
+						 pkt->pkt.sco.data_total_len);
+			break;
+
+		case H4_HCI_TYPE_EVT:
+		default:
+			DIE(1, "[BtEmulator] attempt to send H4 type %d\n", pkt->h4_type);
+			break;
+	}
+
+	/* The header ;) */
+	actual_write += sizeof(uint8_t);
+
+	return write(fd, ptr, actual_write);
+}
+
 int main(int argc, char **argv)
 {
   int ret = 0, skt_fd = -1, fifo_fd = -1, device_id = -1;
@@ -272,7 +331,7 @@ int main(int argc, char **argv)
           } else {
             available_for_write = BUFFER_SIZE - (rx_already_sent_len -
               rx_waiting_to_send_len);
-          }
+         }
 
           if (available_for_write <= 0) {
             /* We have no data to write, let's disable POLLOUT events for the
@@ -283,7 +342,9 @@ int main(int argc, char **argv)
           } else {
             uint8_t *ptr = rx_buffer + (rx_already_sent_len % BUFFER_SIZE);
 
-            ret = write(pollers[i].fd, ptr, available_for_write);
+            ret = write_hci_data_to_btcontroller(pollers[i].fd,
+																								 ptr,
+																								 available_for_write);
             if (ret >= 0) {
 //              printf("Wrote %d bytes from FIFO to HCI scoket\n", ret);
 
@@ -326,7 +387,7 @@ int main(int argc, char **argv)
             uint8_t *ptr = rx_buffer + (rx_waiting_to_send_len % BUFFER_SIZE);
             ret = read(pollers[i].fd, ptr, available_space);
             if (ret >= 0) {
-//              printf("Received %d bytes from FIFO endpoint\n", ret);
+              printf("Received %d bytes from FIFO endpoint\n", ret);
               if (ret == 0 && is_server_used) {
                 pollers[FD_BLUETOOTH].events &= ~POLLOUT;
                 close(pollers[i].fd);
