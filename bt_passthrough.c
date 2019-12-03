@@ -247,7 +247,9 @@ static int write_hci_data_to_btemulator(int fd, void *ptr, size_t write_len)
 
 		case H4_HCI_TYPE_EVT:
 			actual_write = pkt->pkt.evt.data_total_len + sizeof(hci_event_packet_t);
-			printf("[BtController] Send %s\n", get_h4_type_name(pkt->h4_type));
+			printf("[BtController] Send %s type %d len %d\n", get_h4_type_name(pkt->h4_type),
+						 pkt->pkt.evt.event_code,
+						 pkt->pkt.evt.data_total_len);
 			break;
 
 		default:
@@ -424,7 +426,7 @@ int main(int argc, char **argv)
             uint8_t *ptr = rx_buffer + (rx_waiting_to_send_len % BUFFER_SIZE);
             ret = read(pollers[i].fd, ptr, available_space);
             if (ret >= 0) {
-              printf("Received %d bytes from FIFO endpoint\n", ret);
+//              printf("Received %d bytes from FIFO endpoint\n", ret);
               if (ret == 0 && is_server_used) {
                 pollers[FD_BLUETOOTH].events &= ~POLLOUT;
                 close(pollers[i].fd);
