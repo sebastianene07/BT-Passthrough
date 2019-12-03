@@ -223,6 +223,43 @@ static int write_hci_data_to_btcontroller(int fd, void *ptr, size_t write_len)
 	return write(fd, ptr, actual_write);
 }
 
+static int write_hci_data_to_btemulator(int fd, void *ptr, size_t write_len)
+{
+	h4_hci_pkt_t *pkt = (h4_hci_pkt_t *)ptr;
+	size_t actual_write = 0;
+
+	switch (pkt->h4_type) {
+		case H4_HCI_TYPE_ACL:
+			actual_write = pkt->pkt.acl.data_total_len + sizeof(hci_acl_packet_t);
+			printf("[BtController] Send %s Handle %d len:%d\n",
+						 get_h4_type_name(pkt->h4_type),
+						 pkt->pkt.acl.handle,
+						 pkt->pkt.acl.data_total_len);
+			break;
+
+		case H4_HCI_TYPE_SCO:
+			actual_write = pkt->pkt.sco.data_total_len + sizeof(hci_sco_packet_t);
+			printf("[BtController] Send %s Handle %d len:%d\n",
+						 get_h4_type_name(pkt->h4_type),
+						 pkt->pkt.sco.conn_handle,
+						 pkt->pkt.sco.data_total_len);
+			break;
+
+		case H4_HCI_TYPE_EVT:
+			actual_write = pkt->pkt.evt.data_total_len + sizeof(hci_event_packet_t);
+			printf("[BtController] Send %s\n", get_h4_type_name(pkt->h4_type));
+			break;
+
+		default:
+			DIE(1, "[BtController] attempt to send H4 type %d\n", pkt->h4_type)
+			break;
+	}
+
+	/* The header ;) */
+	actual_write += sizeof(uint8_t);
+  return write(fd, ptr, actual_write);
+}
+
 int main(int argc, char **argv)
 {
   int ret = 0, skt_fd = -1, fifo_fd = -1, device_id = -1;
@@ -310,7 +347,7 @@ int main(int argc, char **argv)
           } else {
             uint8_t *ptr = tx_buffer + (tx_already_sent_len % BUFFER_SIZE);
 
-            ret = write(pollers[i].fd, ptr, available_for_write);
+						ret = write_hci_data_to_btemulator(pollers[i].fd, ptr, available_for_write);
             if (ret >= 0) {
 //              printf("Wrote %d bytes from HCI socket to FIFO\n", ret);
 

@@ -16,6 +16,7 @@ typedef enum h4_hci_type_e {
   H4_HCI_TYPE_ACL,
   H4_HCI_TYPE_SCO,
   H4_HCI_TYPE_EVT,
+  H4_HCI_TYPE_EXTENDED_CMD = 0x09,
   H4_HCI_TYPE_INVALID,
 } h4_hci_type_t;
 
@@ -40,10 +41,17 @@ typedef struct __attribute__((__packed__)) hci_sco_packet_s {
   uint8_t data_total_len;
 } hci_sco_packet_t;
 
+typedef struct __attribute__((__packed__)) hci_event_packet_s {
+  uint8_t event_code;
+  uint8_t data_total_len;
+  uint8_t params[0];
+} hci_event_packet_t;
+
 typedef union h4_hci_pkt_type_u {
   hci_cmd_packet_t cmd;
   hci_acl_packet_t acl;
   hci_sco_packet_t sco;
+  hci_event_packet_t evt;
 } h4_hci_pkt_type_t;
 
 typedef struct h4_hci_pkt_s {
