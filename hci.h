@@ -3,6 +3,15 @@
 
 #include <stdint.h>
 
+#define HCI_EVENT_COMMAND_COMPLETE                      (0x0E)
+
+#define HCI_GET_VENDOR_CAPABILITIES_OPCODE              (0XFD53)
+
+#define HCI_GET_VENDOR_RESPONSE                                    \
+"\x04\x0e\x12\x01\x53\xfd\x00\x0a\x01\x00\x04\x19\x00\x10\x01\x60" \
+"\x00\x1e\x01\x01\x00"                                             \
+
+
 typedef union __attribute__((__packed__)) hci_opcode_u {
   uint16_t opcode;
   struct __attribute__((__packed__)) opcode_s {
@@ -40,6 +49,12 @@ typedef struct __attribute__((__packed__)) hci_sco_packet_s {
   uint16_t rfu : 2;
   uint8_t data_total_len;
 } hci_sco_packet_t;
+
+typedef struct __attribute__((__packed__)) hci_event_cmd_complete_s {
+  uint8_t num_hci_cmd_packets;
+  uint16_t opcode;
+  uint8_t return_params[0];
+} hci_event_cmd_complete_t;
 
 typedef struct __attribute__((__packed__)) hci_event_packet_s {
   uint8_t event_code;
