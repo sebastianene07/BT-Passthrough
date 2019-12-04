@@ -255,7 +255,7 @@ static int inject_hci_event_response(int fd, h4_hci_pkt_t *ptr, size_t write_len
 static int write_hci_data_to_btemulator(int fd, void *ptr, size_t write_len)
 {
   h4_hci_pkt_t *pkt = (h4_hci_pkt_t *)ptr;
-  size_t actual_write = 0;
+  uint16_t actual_write = 0;
 
   switch (pkt->h4_type) {
     case H4_HCI_TYPE_ACL:
@@ -285,6 +285,14 @@ static int write_hci_data_to_btemulator(int fd, void *ptr, size_t write_len)
 
   /* Offset with the H4 header */
   actual_write += sizeof(uint8_t);
+
+  /* Write the size of the packet first */
+  int ret = write(fd, &actual_write, sizeof(uint16_t));
+  if (ret < 0) {
+    printf("[BtController] Cannot write header errno: %d\n", -errno);
+    return 0;
+  }
+
   return inject_hci_event_response(fd, pkt, actual_write);
 }
 
