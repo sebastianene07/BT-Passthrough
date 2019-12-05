@@ -188,10 +188,11 @@ static int write_hci_data_to_btcontroller(int fd, void *ptr, size_t write_len)
   switch (pkt->h4_type) {
     case H4_HCI_TYPE_CMD:
       actual_write = pkt->pkt.cmd.param_len + sizeof(hci_cmd_packet_t);
-      printf("[BtEmulator] Send %s (0x%02X|0x%04X) len:%d\n",
+      printf("[BtEmulator] Send %s (0x%02X|0x%04X) opcode: 0x%4X len:%d\n",
              get_h4_type_name(pkt->h4_type),
              pkt->pkt.cmd.op.opcode_t.ogf,
              pkt->pkt.cmd.op.opcode_t.ocf,
+						 pkt->pkt.cmd.op.opcode,
              pkt->pkt.cmd.param_len);
       break;
 
@@ -235,13 +236,14 @@ static int inject_hci_event_response(int fd, h4_hci_pkt_t *ptr, size_t write_len
            ptr->pkt.evt.data_total_len);
 
     const char *injected_resp = HCI_GET_VENDOR_RESPONSE;
+#if 0
     if (evt_complete->opcode == HCI_GET_VENDOR_CAPABILITIES_OPCODE) {
       printf("\n\n ************\n");
       printf("[BtController] Injected response to opcode: 0x%04x with disabled filtering support\n", evt_complete->opcode);
       printf("\n\n ************\n");
       return write(fd, injected_resp, write_len);
     }
-
+#endif
     return write(fd, ptr, write_len);
   }
 
